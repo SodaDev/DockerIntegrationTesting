@@ -16,7 +16,7 @@ import java.util.*;
 
 public class DockerIntegrationTestExecutionListener extends AbstractTestExecutionListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(DockerIntegrationTestExecutionListener.class);
-    private static final String PREFIX = "\n==================================================\n";
+    private static final String PREFIX = "\n\n==================================================\n\n";
 
     private AuthConfig authConfig;
     private DockerClient dockerClient;
@@ -30,9 +30,9 @@ public class DockerIntegrationTestExecutionListener extends AbstractTestExecutio
         authConfig = buildAuthConfig(dockerRepoConfig);
         dockerClient = buildDockerClient(dockerRepoConfig, authConfig);
 
-        LOGGER.info(PREFIX + "Pulling images {} for integration test", dockerTestImages.images());
+        LOGGER.info(PREFIX + "Pulling images {} for integration test" + PREFIX, dockerTestImages.images());
         pullDockerImages(dockerTestImages);
-        LOGGER.info(PREFIX + "Docker images successfully loaded");
+        LOGGER.info(PREFIX + "Docker images successfully loaded" + PREFIX);
 
         super.beforeTestClass(testContext);
     }
@@ -42,11 +42,11 @@ public class DockerIntegrationTestExecutionListener extends AbstractTestExecutio
         final DockerRepositoryConfig dockerRepoConfig = testContext.getTestClass().getAnnotation(DockerRepositoryConfig.class);
         final DockerTestImages dockerTestImages = testContext.getTestClass().getAnnotation(DockerTestImages.class);
 
-        LOGGER.info(PREFIX + "Starting docker containers: {}", dockerTestImages.images());
+        LOGGER.info(PREFIX + "Starting docker containers: {}" + PREFIX, dockerTestImages.images());
         for (DockerTestImage image : dockerTestImages.images()) {
             startDockerContainer(image);
         }
-        LOGGER.info(PREFIX + "Docker containers started");
+        LOGGER.info(PREFIX + "Docker containers started" + PREFIX);
 
         super.prepareTestInstance(testContext);
     }
@@ -96,20 +96,22 @@ public class DockerIntegrationTestExecutionListener extends AbstractTestExecutio
         String id = creation.id();
         final ContainerInfo info = dockerClient.inspectContainer(id);
 
-        LOGGER.info("Container {} will be started now", info);
+        LOGGER.info(PREFIX + "Container {} will be started now" + PREFIX, info);
         dockerClient.startContainer(id);
         containers.add(id);
-        LOGGER.info("Container {} started and initializing now", info);
+        Thread.sleep(dockerImage.initDelayInMs());
+        LOGGER.info(PREFIX + "Container {} started and initializing now" + PREFIX, info);
 
         for (DockerTestImageInitCmd command : dockerImage.initCmds()) {
             final String execId = dockerClient.execCreate(
                     id, command.cmd(), DockerClient.ExecCreateParam.attachStdout(),
                     DockerClient.ExecCreateParam.attachStderr());
             final LogStream output = dockerClient.execStart(execId);
-            final String execOutput = output.readFully();
+            LOGGER.debug(PREFIX + output.readFully() + PREFIX);
+            Thread.sleep(dockerImage.initDelayInMs());
         }
 
-        LOGGER.info("Container started successfully");
+        LOGGER.info(PREFIX + "Container started successfully" + PREFIX);
     }
 
     private void pullDockerImages(DockerTestImages dockerTestImages) throws DockerException, InterruptedException, DockerCertificateException {

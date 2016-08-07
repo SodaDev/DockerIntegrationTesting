@@ -1,19 +1,21 @@
 package com.soda;
 
 import com.couchbase.client.java.Bucket;
-import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
 import com.couchbase.client.java.document.JsonDocument;
 import com.couchbase.client.java.document.json.JsonArray;
 import com.couchbase.client.java.document.json.JsonObject;
-import com.couchbase.client.java.query.N1qlQuery;
-import com.couchbase.client.java.query.N1qlQueryResult;
-import com.couchbase.client.java.query.N1qlQueryRow;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestExecutionListeners;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertEquals;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest
@@ -30,49 +32,47 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 @DockerTestImages(
     images = @DockerTestImage(
             name = "couchbase:latest",
-            ports = { "8091", "8092", "8093", "8094", "11210", "11211" },
+            ports = { "8091", "8092", "8093", "8094", "11207", "11210", "11211", "18091", "18092", "18093" },
             initCmds = {
-                    //http://developer.couchbase.com/documentation/server/4.5/install/init-setup.html http://developer.couchbase.com/documentation/server/current/cli/cbcli/cluster-init.html
-                    @DockerTestImageInitCmd(cmd = {"bash", "-c", "couchbase-cli cluster-init -c 192.168.99.100 --cluster-init-username=Administrator --cluster-init-password=password --cluster-init-ramsize=600 -u admin -p password"}),
-                    @DockerTestImageInitCmd(cmd = {"bash", "-c", "couchbase-cli bucket-create -c 192.168.99.100 --bucket=default --bucket-type=couchbase --bucket-port=11211 --bucket-ramsize=600 --bucket-replica=1 -u Administrator -p password"})
-            }
+                    // http://developer.couchbase.com/documentation/server/4.5/install/init-setup.html
+                    // http://developer.couchbase.com/documentation/server/current/cli/cbcli/cluster-init.html
+                    @DockerTestImageInitCmd(cmd = {"bash", "-c", "couchbase-cli cluster-init -c 192.168.99.100 --cluster-init-username=Administrator --cluster-init-password=password --cluster-init-ramsize=600 --services=data -u admin -p password"}),
+                    @DockerTestImageInitCmd(cmd = {"bash", "-c", "couchbase-cli bucket-create -c 192.168.99.100:8091 --bucket=default --bucket-type=couchbase --bucket-port=11211 --bucket-ramsize=600 --bucket-replica=1 -u Administrator -p password"})
+            },
+            initDelayInMs = 7500
     )
 )
 public class CouchbaseIntegrationTest {
+    private CouchbaseCluster cluster;
+    private Bucket bucket;
+
+    @Before
+    public void setUp() throws Exception {
+        cluster = CouchbaseCluster.create("192.168.99.100");
+        bucket = cluster.openBucket("default", 30, TimeUnit.SECONDS);
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        bucket.close();
+        cluster.disconnect();
+    }
 
     @Test
     public void shouldPullDockerImage() throws Exception {
-        Cluster cluster = CouchbaseCluster.create("192.168.99.100");
-        Bucket bucket = cluster.openBucket("default");
-
-        // Create a JSON Document
+        // GIVEN any json document
         JsonObject arthur = JsonObject.create()
                 .put("name", "Arthur")
                 .put("email", "kingarthur@couchbase.com")
                 .put("interests", JsonArray.from("Holy Grail", "African Swallows"));
 
-        // Store the Document
-        bucket.upsert(JsonDocument.create("u:king_arthur", arthur));
+        // WHEN document is persisted
+        bucket.upsert(JsonDocument.create("u:king_arthur", arthur), 30, TimeUnit.SECONDS);
 
-        // Load the Document and print it
-        // Prints Content and Metadata of the stored Document
-        System.out.println(bucket.get("u:king_arthur"));
+        // THEN document should be persisted correctly
+        JsonDocument result = bucket.get("u:king_arthur");
 
-        // Create a N1QL Primary Index (but ignore if it exists)
-        bucket.bucketManager().createN1qlPrimaryIndex(true, false);
-
-        // Perform a N1QL Query
-        N1qlQueryResult result = bucket.query(
-                N1qlQuery.parameterized("SELECT name FROM default WHERE $1 IN interests",
-                        JsonArray.from("African Swallows"))
-        );
-
-        // Print each found Row
-        for (N1qlQueryRow row : result) {
-            // Prints {"name":"Arthur"}
-            System.out.println(row);
-        }
+        System.out.println(result);
+        assertEquals(arthur, result.content());
     }
 }
-//couchbase-cli cluster-init -c 192.168.99.100 --cluster-init-username=Administrator --cluster-init-password=password --cluster-init-ramsize=600 -u admin -p password
-//couchbase-cli bucket-create -c 192.168.99.100 --bucket=default --bucket-type=couchbase --bucket-port=11211 --bucket-ramsize=600 --bucket-replica=1 -u Administrator -p password

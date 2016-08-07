@@ -5,4 +5,5 @@ public @interface DockerTestImage {
     String[] configCmds() default {};
     String[] ports() default {};
     DockerTestImageInitCmd[] initCmds() default {};
+    int initDelayInMs();
 }
