@@ -1,11 +1,11 @@
-package com.soda;
+package com.soda.docker.test.manager;
 
-import com.soda.config.DockerRepositoryConfig;
-import com.soda.config.DockerTestImage;
-import com.soda.config.DockerTestImages;
+import com.soda.docker.test.config.DockerRepositoryConfig;
+import com.soda.docker.test.config.DockerTestImage;
+import com.soda.docker.test.config.DockerTestImages;
 import com.spotify.docker.client.DefaultDockerClient;
-import com.spotify.docker.client.DockerCertificateException;
 import com.spotify.docker.client.DockerCertificates;
+import com.spotify.docker.client.exceptions.DockerCertificateException;
 import com.spotify.docker.client.messages.AuthConfig;
 import org.apache.commons.lang.StringUtils;
 
@@ -15,8 +15,11 @@ import java.util.List;
 
 import static java.util.Arrays.asList;
 
+/**
+ * DockerTestManager builder
+ */
 public final class DockerTestManagerBuilder {
-
+    private static final String DOCKER_HOST_ENV = "DOCKER_HOST";
     private DockerRepositoryConfig repoConfig;
     private List<DockerTestImage> images;
 
@@ -42,7 +45,7 @@ public final class DockerTestManagerBuilder {
     }
 
     private DefaultDockerClient.Builder createDockerBuilder() throws DockerCertificateException {
-        if (isRepoConfigEmpty()) {
+        if (isRepoConfigEmpty() || System.getenv(DOCKER_HOST_ENV) != null) {
             return DefaultDockerClient.fromEnv();
         }
         return DefaultDockerClient.builder()

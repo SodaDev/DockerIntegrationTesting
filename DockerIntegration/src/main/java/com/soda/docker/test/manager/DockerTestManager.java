@@ -1,18 +1,24 @@
-package com.soda;
+package com.soda.docker.test.manager;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.soda.config.DockerTestImage;
-import com.soda.config.DockerTestImageInitCmd;
-import com.spotify.docker.client.*;
-import com.spotify.docker.client.messages.*;
+import com.soda.DockerIntegrationTestExecutionListener;
+import com.soda.docker.test.config.DockerTestImage;
+import com.soda.docker.test.config.DockerTestImageInitCmd;
+import com.spotify.docker.client.DefaultDockerClient;
+import com.spotify.docker.client.exceptions.DockerCertificateException;
+import com.spotify.docker.client.exceptions.DockerException;
+import com.spotify.docker.client.exceptions.ImageNotFoundException;
+import com.spotify.docker.client.messages.ContainerConfig;
+import com.spotify.docker.client.messages.ContainerInfo;
+import com.spotify.docker.client.messages.HostConfig;
+import com.spotify.docker.client.messages.PortBinding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static com.google.common.collect.Lists.newArrayList;
@@ -22,14 +28,14 @@ import static java.util.Arrays.asList;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 
+/**
+ * Class wraps up all the docker integration test logic
+ */
 public class DockerTestManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(DockerIntegrationTestExecutionListener.class);
-    private static final String PREFIX = "\n\n==================================================\n\n";
-
+    private final Set<String> containers = Sets.newConcurrentHashSet();
     private final DefaultDockerClient dockerClient;
     private final List<DockerTestImage> images;
-
-    private final Set<String> containers = Sets.newConcurrentHashSet();
 
     protected DockerTestManager(DefaultDockerClient dockerClient, List<DockerTestImage> images) {
         this.dockerClient = dockerClient;
@@ -37,18 +43,18 @@ public class DockerTestManager {
     }
 
     public void pullImages() throws DockerException, InterruptedException {
-        LOGGER.info(PREFIX + "Prepare for test: [STARTED] Pulling images for integration test" + PREFIX);
+        LOGGER.info("Prepare for test: [STARTED] Pulling images for integration test");
         pullDockerImages();
-        LOGGER.info(PREFIX + "Prepare for test: [FINISHED] Pulling images for integration test" + PREFIX);
+        LOGGER.info("Prepare for test: [FINISHED] Pulling images for integration test");
     }
 
     public void startContainers() throws InterruptedException, DockerException, DockerCertificateException {
         try {
-            LOGGER.info(PREFIX + "Run test: [STARTED] Starting containers" + PREFIX);
+            LOGGER.info("Run test: [STARTED] Starting containers");
             startDockerContainers();
-            LOGGER.info(PREFIX + "Run test: [FINISHED] Starting containers" + PREFIX);
+            LOGGER.info("Run test: [FINISHED] Starting containers");
         } catch (ImageNotFoundException infe) {
-            LOGGER.info(PREFIX + "Run test: Image was not found locally, pulling image from docker registry" + PREFIX);
+            LOGGER.info("Run test: Image was not found locally, pulling image from docker registry");
             pullImages();
             startContainers();
         }
@@ -56,10 +62,10 @@ public class DockerTestManager {
 
     public void clearAfterTest() throws DockerException, InterruptedException {
         for (String id : containers) {
-            LOGGER.info(PREFIX + "After test: [STARTED] Kill and remove container {}" + PREFIX, id);
+            LOGGER.info("After test: [STARTED] Kill and remove container {}", id);
             dockerClient.killContainer(id);
             dockerClient.removeContainer(id);
-            LOGGER.info(PREFIX + "After test: [FINISHED] Kill and remove container {}" + PREFIX, id);
+            LOGGER.info("After test: [FINISHED] Kill and remove container {}", id);
         }
 
         containers.clear();
@@ -71,17 +77,17 @@ public class DockerTestManager {
 
     private void pullDockerImages() throws DockerException, InterruptedException {
         for (DockerTestImage dockerImage : images) {
-            LOGGER.info(PREFIX + "Prepare for test: [STARTED] Pulling image {} for integration test" + PREFIX, dockerImage.name());
+            LOGGER.info("Prepare for test: [STARTED] Pulling image {} for integration test", dockerImage.name());
             dockerClient.pull(dockerImage.name());
-            LOGGER.info(PREFIX + "Prepare for test: [FINISHED] Pulling image {} for integration test" + PREFIX, dockerImage.name());
+            LOGGER.info("Prepare for test: [FINISHED] Pulling image {} for integration test", dockerImage.name());
         }
     }
 
     private void startDockerContainers() throws InterruptedException, DockerException, DockerCertificateException {
         for (DockerTestImage dockerImage : images) {
-            LOGGER.info(PREFIX + "Run test: [STARTED] Starting container {}" + PREFIX, dockerImage.name());
+            LOGGER.info("Run test: [STARTED] Starting container {}", dockerImage.name());
             startDockerContainer(dockerImage);
-            LOGGER.info(PREFIX + "Run test: [FINISHED] Starting container {}" + PREFIX, dockerImage.name());
+            LOGGER.info("Run test: [FINISHED] Starting container {}", dockerImage.name());
         }
     }
 
@@ -96,11 +102,11 @@ public class DockerTestManager {
         String id = dockerClient.createContainer(containerConfig).id();
         final ContainerInfo info = dockerClient.inspectContainer(id);
 
-        LOGGER.info(PREFIX + "Run test: [STARTED] Container {} will start now" + PREFIX, info);
+        LOGGER.info("Run test: [STARTED] Container will start now: {}", info);
         dockerClient.startContainer(id);
         containers.add(id);
         Thread.sleep(dockerImage.initDelayInMs());
-        LOGGER.info(PREFIX + "Run test: [FINISHED] Container {} started and initializing now" + PREFIX, info);
+        LOGGER.info("Run test: [FINISHED] Container started and initializing now: {}", info);
 
         initializeContainer(id, dockerImage);
     }
@@ -116,8 +122,7 @@ public class DockerTestManager {
     private void initializeContainer(String id, DockerTestImage dockerImage) throws DockerException, InterruptedException {
         for (DockerTestImageInitCmd command : dockerImage.initCmds()) {
             final String execId = dockerClient.execCreate(id, command.cmd(), attachStdout(), attachStderr());
-            final LogStream output = dockerClient.execStart(execId);
-//            LOGGER.debug(PREFIX + "Run test: Container init with command {} and result {}" + PREFIX, command.cmd(), output.readFully());
+            dockerClient.execStart(execId);
             Thread.sleep(dockerImage.initDelayInMs());
         }
     }

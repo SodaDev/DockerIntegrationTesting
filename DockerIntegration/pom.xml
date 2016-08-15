@@ -29,7 +29,7 @@
         <dependency>
             <groupId>com.spotify</groupId>
             <artifactId>docker-client</artifactId>
-            <version>3.5.12</version>
+            <version>5.0.2</version>
         </dependency>
     </dependencies>
 

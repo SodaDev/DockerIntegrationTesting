@@ -1,10 +1,15 @@
 package com.soda;
 
-import com.soda.config.DockerIntegrationTest;
+import com.soda.docker.test.config.DockerIntegrationTest;
+import com.soda.docker.test.manager.DockerTestManager;
+import com.soda.docker.test.manager.DockerTestManagerBuilder;
 import org.springframework.core.Ordered;
 import org.springframework.test.context.TestContext;
 import org.springframework.test.context.support.AbstractTestExecutionListener;
 
+/**
+ * Test execution listener responsible for test lifecycle handling
+ */
 public class DockerIntegrationTestExecutionListener extends AbstractTestExecutionListener {
     private DockerTestManager dockerTestManager;
     private DockerIntegrationTest testConfig;
