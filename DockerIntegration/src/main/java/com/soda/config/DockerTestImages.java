@@ -1,4 +1,4 @@
-package com.soda;
+package com.soda.config;
 
 import java.lang.annotation.*;
 

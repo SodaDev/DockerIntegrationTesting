@@ -1,4 +1,4 @@
-package com.soda;
+package com.soda.config;
 
 import java.lang.annotation.*;
 import java.net.URI;
@@ -8,8 +8,8 @@ import java.net.URI;
 @Inherited
 public @interface DockerRepositoryConfig {
     String serverAddress() default "";
-    String email();
-    String username();
-    String password();
-    String certPath();
+    String email() default "";
+    String username() default "";
+    String password() default "";
+    String certPath() default "";
 }
